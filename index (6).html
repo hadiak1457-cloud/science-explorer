@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Science Explorer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{
+  background:#0a0a1a;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;width:100%;font-family:'Segoe UI',sans-serif;overflow:hidden;
+  touch-action:none;user-select:none;
+}
+#gameWrapper{
+  position:relative;display:flex;flex-direction:column;align-items:center;
+  width:100%;max-width:820px;
+}
+canvas{
+  display:block;width:100%;max-width:820px;
+  border-radius:12px 12px 0 0;
+  box-shadow:0 0 50px rgba(78,205,196,0.3);
+}
+#hud{
+  width:100%;display:flex;justify-content:space-between;align-items:center;
+  padding:6px 12px;background:rgba(10,10,30,0.95);
+  border:2px solid rgba(78,205,196,0.4);border-top:none;border-radius:0 0 12px 12px;
+  flex-wrap:wrap;gap:4px;
+}
+.hud-item{color:#fff;font-size:11px;font-weight:700;letter-spacing:.5px;white-space:nowrap;}
+.hud-item span{color:#4ecdc4;font-size:13px;margin-left:3px;}
+#heartsDiv{display:flex;gap:2px;align-items:center;}
+
+/* Mobile Controls */
+#mobileControls{
+  width:100%;max-width:820px;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 16px;margin-top:8px;
+  pointer-events:none;
+}
+#leftControls{display:flex;gap:10px;pointer-events:all;}
+#rightControls{display:flex;gap:10px;pointer-events:all;}
+.ctrl-btn{
+  width:58px;height:58px;border-radius:50%;
+  background:rgba(78,205,196,0.2);
+  border:2px solid rgba(78,205,196,0.5);
+  color:#4ecdc4;font-size:22px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;user-select:none;
+  transition:background .1s;
+  -webkit-tap-highlight-color:transparent;
+  pointer-events:all;
+}
+.ctrl-btn:active,.ctrl-btn.pressed{background:rgba(78,205,196,0.45);border-color:#4ecdc4;}
+#jumpBtn{width:68px;height:68px;font-size:26px;background:rgba(255,217,61,0.2);border-color:rgba(255,217,61,0.5);color:#ffd93d;}
+#jumpBtn:active,#jumpBtn.pressed{background:rgba(255,217,61,0.45);}
+#muteBtn{
+  position:absolute;top:8px;right:8px;
+  width:36px;height:36px;border-radius:50%;
+  background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.3);
+  color:#fff;font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;z-index:20;
+}
+
+/* Question Modal */
+#qModal{
+  display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  border:3px solid #4ecdc4;border-radius:16px;padding:22px 24px;
+  width:90%;max-width:480px;z-index:10;
+  box-shadow:0 0 60px rgba(78,205,196,0.5);
+  text-align:center;animation:popIn .25s ease;
+}
+@keyframes popIn{from{transform:translate(-50%,-50%) scale(0.8);opacity:0;}to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+#qBadge{
+  display:inline-block;background:#ffd93d;color:#333;
+  font-weight:800;font-size:11px;padding:3px 12px;border-radius:20px;
+  margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;
+}
+#qText{color:#fff;font-size:16px;font-weight:600;line-height:1.5;margin-bottom:16px;}
+#qOptions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.qBtn{
+  background:rgba(255,255,255,0.08);border:2px solid rgba(78,205,196,0.4);
+  color:#fff;font-size:14px;font-weight:600;padding:12px 8px;border-radius:10px;
+  cursor:pointer;transition:all .15s;
+}
+.qBtn:active,.qBtn:hover{background:rgba(78,205,196,0.2);border-color:#4ecdc4;}
+.qBtn.correct{background:#27ae60;border-color:#2ecc71;animation:flash .3s;}
+.qBtn.wrong{background:#c0392b;border-color:#e74c3c;animation:shake .3s;}
+@keyframes flash{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-5px);}75%{transform:translateX(5px);};}
+#qFeedback{color:#ffd93d;font-size:12px;font-weight:700;margin-top:10px;min-height:18px;line-height:1.4;}
+</style>
+</head>
+<body>
+<div id="gameWrapper">
+  <button id="muteBtn" onclick="toggleMute()">🔊</button>
+  <canvas id="c" width="820" height="500"></canvas>
+  <div id="hud">
+    <div class="hud-item">SCORE <span id="scoreEl">0</span></div>
+    <div class="hud-item">LVL <span id="levelEl">1</span></div>
+    <div id="heartsDiv"></div>
+    <div class="hud-item">✅ <span id="correctEl">0/0</span></div>
+    <div class="hud-item">⏱ <span id="timeEl">60</span>s</div>
+    <div class="hud-item">BEST <span id="bestEl">0</span></div>
+  </div>
+  <div id="qModal">
+    <div id="qBadge">Science Question</div>
+    <div id="qText"></div>
+    <div id="qOptions"></div>
+    <div id="qFeedback"></div>
+  </div>
+  <div id="mobileControls">
+    <div id="leftControls">
+      <div class="ctrl-btn" id="leftBtn">◀</div>
+      <div class="ctrl-btn" id="rightBtn">▶</div>
+    </div>
+    <div id="rightControls">
+      <div class="ctrl-btn" id="jumpBtn">▲</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  AUDIO ENGINE
+// ═══════════════════════════════════════════════
+let audioCtx = null;
+let muted = false;
+let musicNode = null;
+let musicGain = null;
+let musicPlaying = false;
+
+function getAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function toggleMute(){
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+  if(musicGain) musicGain.gain.value = muted ? 0 : 0.08;
+}
+
+function playSound(type){
+  if(muted) return;
+  try{
+    const ac = getAudio();
+    const g = ac.createGain();
+    g.connect(ac.destination);
+    const o = ac.createOscillator();
+    o.connect(g);
+    const now = ac.currentTime;
+
+    switch(type){
+      case 'jump':
+        o.type='sine'; o.frequency.setValueAtTime(280,now); o.frequency.exponentialRampToValueAtTime(520,now+0.12);
+        g.gain.setValueAtTime(0.18,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.18);
+        o.start(now); o.stop(now+0.18); break;
+
+      case 'correct':
+        const notes=[523,659,784,1047];
+        notes.forEach((freq,i)=>{
+          const oc=ac.createOscillator(), gc=ac.createGain();
+          oc.connect(gc); gc.connect(ac.destination);
+          oc.type='sine'; oc.frequency.value=freq;
+          const t=now+i*0.1;
+          gc.gain.setValueAtTime(0,t); gc.gain.linearRampToValueAtTime(0.2,t+0.02);
+          gc.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+          oc.start(t); oc.stop(t+0.18);
+        }); break;
+
+      case 'wrong':
+        o.type='sawtooth'; o.frequency.setValueAtTime(200,now); o.frequency.exponentialRampToValueAtTime(80,now+0.35);
+        g.gain.setValueAtTime(0.22,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.35);
+        o.start(now); o.stop(now+0.35); break;
+
+      case 'hit':
+        o.type='square'; o.frequency.setValueAtTime(180,now); o.frequency.exponentialRampToValueAtTime(60,now+0.25);
+        g.gain.setValueAtTime(0.25,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.25);
+        o.start(now); o.stop(now+0.25); break;
+
+      case 'collect':
+        o.type='triangle'; o.frequency.setValueAtTime(600,now); o.frequency.exponentialRampToValueAtTime(900,now+0.08);
+        g.gain.setValueAtTime(0.15,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.15);
+        o.start(now); o.stop(now+0.15); break;
+
+      case 'levelup':{
+        const fanfare=[392,494,587,784,987];
+        fanfare.forEach((freq,i)=>{
+          const oc=ac.createOscillator(), gc=ac.createGain();
+          oc.connect(gc); gc.connect(ac.destination);
+          oc.type='triangle'; oc.frequency.value=freq;
+          const t=now+i*0.13;
+          gc.gain.setValueAtTime(0,t); gc.gain.linearRampToValueAtTime(0.22,t+0.04);
+          gc.gain.exponentialRampToValueAtTime(0.001,t+0.22);
+          oc.start(t); oc.stop(t+0.25);
+        }); break;
+      }
+      case 'gameover':
+        o.type='sawtooth'; o.frequency.setValueAtTime(300,now); o.frequency.exponentialRampToValueAtTime(60,now+0.8);
+        g.gain.setValueAtTime(0.2,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.8);
+        o.start(now); o.stop(now+0.8); break;
+
+      case 'land':
+        o.type='sine'; o.frequency.setValueAtTime(120,now); o.frequency.exponentialRampToValueAtTime(60,now+0.08);
+        g.gain.setValueAtTime(0.08,now); g.gain.exponentialRampToValueAtTime(0.001,now+0.08);
+        o.start(now); o.stop(now+0.08); break;
+    }
+  }catch(e){}
+}
+
+// Background music per level
+const MUSIC_SCALES = [
+  [261,294,330,349,392,440,494,523], // space: C major bright
+  [196,220,247,262,294,330,370,392], // ocean: G major low
+  [220,247,277,294,330,370,415,440], // jungle: A minor exotic
+  [233,261,294,311,349,392,440,466], // desert: Bb pentatonic
+  [174,196,220,233,261,294,330,349], // arctic: F major slow
+];
+const MUSIC_TEMPOS = [0.38, 0.45, 0.35, 0.42, 0.5];
+
+function startMusic(lvl){
+  stopMusic();
+  if(muted) return;
+  try{
+    const ac = getAudio();
+    const scale = MUSIC_SCALES[lvl] || MUSIC_SCALES[0];
+    const tempo = MUSIC_TEMPOS[lvl] || 0.4;
+    musicGain = ac.createGain();
+    musicGain.gain.value = 0.08;
+    musicGain.connect(ac.destination);
+
+    let t = ac.currentTime + 0.1;
+    musicPlaying = true;
+
+    function scheduleNotes(){
+      if(!musicPlaying) return;
+      const pattern = [0,2,4,2,5,3,4,1,0,3,2,4,6,4,5,2];
+      pattern.forEach((idx,i)=>{
+        const freq = scale[idx % scale.length];
+        const oc = ac.createOscillator();
+        const gc = ac.createGain();
+        oc.type = lvl === 2 ? 'triangle' : lvl === 4 ? 'sine' : 'triangle';
+        oc.frequency.value = freq;
+        oc.connect(gc); gc.connect(musicGain);
+        const st = t + i * tempo;
+        gc.gain.setValueAtTime(0, st);
+        gc.gain.linearRampToValueAtTime(0.6, st + 0.04);
+        gc.gain.exponentialRampToValueAtTime(0.001, st + tempo * 0.85);
+        oc.start(st); oc.stop(st + tempo);
+      });
+      t += pattern.length * tempo;
+      musicNode = setTimeout(scheduleNotes, pattern.length * tempo * 900);
+    }
+    scheduleNotes();
+  }catch(e){}
+}
+
+function stopMusic(){
+  musicPlaying = false;
+  if(musicNode){ clearTimeout(musicNode); musicNode = null; }
+}
+
+// ═══════════════════════════════════════════════
+//  QUESTION BANK
+// ═══════════════════════════════════════════════
+const QUESTIONS = {
+  space:[
+    {q:"How many planets are in our solar system?",a:"8",opts:["6","8","9","10"],fact:"Pluto was reclassified as a dwarf planet in 2006."},
+    {q:"Which planet is closest to the Sun?",a:"Mercury",opts:["Venus","Earth","Mercury","Mars"],fact:"Mercury has no atmosphere, so temperatures swing wildly!"},
+    {q:"What is the largest planet in our solar system?",a:"Jupiter",opts:["Saturn","Jupiter","Neptune","Uranus"],fact:"Over 1,300 Earths could fit inside Jupiter!"},
+    {q:"What do we call a star and all the objects orbiting it?",a:"Solar system",opts:["Galaxy","Solar system","Nebula","Universe"],fact:"Our solar system is inside the Milky Way galaxy."},
+    {q:"Which planet has the most moons?",a:"Saturn",opts:["Jupiter","Saturn","Uranus","Neptune"],fact:"Saturn has over 140 confirmed moons!"},
+    {q:"What is the name of our galaxy?",a:"Milky Way",opts:["Andromeda","Milky Way","Triangulum","Sombrero"],fact:"The Milky Way is about 100,000 light-years across."},
+    {q:"How long does Earth take to orbit the Sun?",a:"365 days",opts:["30 days","365 days","24 hours","7 days"],fact:"This is why we have 365 days in a year!"},
+    {q:"What causes day and night on Earth?",a:"Earth spinning on its axis",opts:["Earth moving around Sun","Moon blocking Sun","Earth spinning on its axis","Clouds"],fact:"Earth completes one full spin every 24 hours."},
+  ],
+  ocean:[
+    {q:"What is the largest ocean on Earth?",a:"Pacific Ocean",opts:["Atlantic Ocean","Indian Ocean","Pacific Ocean","Arctic Ocean"],fact:"The Pacific Ocean covers more area than all land on Earth combined!"},
+    {q:"What do fish use to breathe underwater?",a:"Gills",opts:["Lungs","Gills","Skin","Fins"],fact:"Gills extract dissolved oxygen directly from water."},
+    {q:"What is the water cycle?",a:"Water cycle",opts:["Erosion","Photosynthesis","Water cycle","Condensation"],fact:"The water cycle has been recycling Earth's water for billions of years."},
+    {q:"Which gas do plants absorb from the air?",a:"Carbon dioxide",opts:["Oxygen","Nitrogen","Carbon dioxide","Hydrogen"],fact:"Plants absorb CO₂ and release oxygen during photosynthesis."},
+    {q:"What percentage of Earth is covered by water?",a:"71%",opts:["50%","60%","71%","90%"],fact:"About 97% of that water is salty ocean water."},
+    {q:"What is the deepest part of the ocean?",a:"Mariana Trench",opts:["Bermuda Triangle","Mariana Trench","Atlantic Ridge","Pacific Basin"],fact:"The Mariana Trench is about 11km deep!"},
+    {q:"What type of animal is a dolphin?",a:"Mammal",opts:["Fish","Reptile","Mammal","Amphibian"],fact:"Dolphins breathe air and nurse their young with milk."},
+    {q:"What do we call animals without a backbone?",a:"Invertebrates",opts:["Vertebrates","Mammals","Invertebrates","Reptiles"],fact:"Invertebrates make up about 97% of all animal species!"},
+  ],
+  jungle:[
+    {q:"What process do plants use to make food from sunlight?",a:"Photosynthesis",opts:["Respiration","Photosynthesis","Digestion","Fermentation"],fact:"Photosynthesis produces the oxygen we breathe!"},
+    {q:"What do we call animals that eat only plants?",a:"Herbivores",opts:["Carnivores","Omnivores","Herbivores","Decomposers"],fact:"Examples include rabbits, cows, and gorillas."},
+    {q:"What is the role of decomposers in an ecosystem?",a:"Break down dead matter",opts:["Hunt prey","Make food","Break down dead matter","Pollinate plants"],fact:"Decomposers like fungi recycle nutrients back into soil."},
+    {q:"What relationship means both animals benefit?",a:"Mutualism",opts:["Parasitism","Predation","Mutualism","Competition"],fact:"Bees and flowers have a mutualistic relationship."},
+    {q:"What is the top layer of the rainforest called?",a:"Canopy",opts:["Forest floor","Understorey","Canopy","Emergent layer"],fact:"The canopy is home to most of the rainforest's wildlife."},
+    {q:"What do caterpillars transform into?",a:"Butterflies or moths",opts:["Beetles","Flies","Butterflies or moths","Bees"],fact:"This transformation is called metamorphosis."},
+    {q:"Which gas do animals breathe in to survive?",a:"Oxygen",opts:["Carbon dioxide","Nitrogen","Oxygen","Hydrogen"],fact:"Oxygen makes up about 21% of Earth's atmosphere."},
+    {q:"What is a food chain?",a:"The order of who eats whom",opts:["A chain found in nature","Animals eating plants","The order of who eats whom","A type of ecosystem"],fact:"Energy is transferred along a food chain from producer to consumer."},
+  ],
+  desert:[
+    {q:"What is the largest hot desert in the world?",a:"Sahara",opts:["Gobi","Sahara","Arabian","Antarctic"],fact:"The Sahara covers most of North Africa — about 9 million km²!"},
+    {q:"How do cacti store water?",a:"In their thick stems",opts:["In their roots","In their leaves","In their thick stems","In their flowers"],fact:"A saguaro cactus can store hundreds of litres of water."},
+    {q:"What energy form relates to temperature?",a:"Thermal energy",opts:["Potential energy","Thermal energy","Kinetic energy","Sound energy"],fact:"Deserts can exceed 50°C in the day and freeze at night."},
+    {q:"What does 'nocturnal' mean?",a:"Active at night",opts:["Active in daytime","Sleeping all year","Active at night","Living underground"],fact:"Many desert animals are nocturnal to avoid the heat."},
+    {q:"What type of rock forms from cooled lava?",a:"Igneous rock",opts:["Sedimentary","Igneous rock","Metamorphic","Limestone"],fact:"Igneous means 'fire-formed' in Latin."},
+    {q:"What is an adaptation?",a:"A feature that helps survival",opts:["A type of food","A type of habitat","A feature that helps survival","A weather pattern"],fact:"Long ears help desert foxes release heat and stay cool."},
+    {q:"What causes the seasons on Earth?",a:"Earth's tilted axis",opts:["Distance from the Sun","Earth's tilted axis","The Moon's orbit","Solar flares"],fact:"The hemisphere tilted toward the Sun gets summer."},
+    {q:"What is evaporation?",a:"Liquid turning to gas",opts:["Gas turning to liquid","Solid turning to liquid","Liquid turning to gas","Ice melting"],fact:"Evaporation is how water enters the atmosphere."},
+  ],
+  arctic:[
+    {q:"What is the freezing point of water in Celsius?",a:"0°C",opts:["-10°C","0°C","100°C","32°C"],fact:"Water boils at 100°C and freezes at 0°C."},
+    {q:"What happens when animals hibernate?",a:"They sleep through winter",opts:["They migrate south","They sleep through winter","They change colour","They grow thicker fur"],fact:"Bears, hedgehogs, and dormice all hibernate."},
+    {q:"What is the frozen ground in the Arctic called?",a:"Permafrost",opts:["Tundra","Permafrost","Glacier","Ice cap"],fact:"Permafrost can be hundreds of metres thick in Siberia."},
+    {q:"Which bear lives in the Arctic?",a:"Polar bear",opts:["Brown bear","Grizzly bear","Polar bear","Panda bear"],fact:"Polar bears have transparent fur — it looks white due to light."},
+    {q:"What are the lights in the Arctic sky called?",a:"Northern lights (Aurora Borealis)",opts:["Solar flares","Shooting stars","Northern lights (Aurora Borealis)","Comets"],fact:"They're caused by solar particles hitting Earth's atmosphere."},
+    {q:"What is a food web?",a:"Many overlapping food chains",opts:["A web spun by animals","A single food chain","Many overlapping food chains","A plant network"],fact:"Food webs show how energy flows through a whole ecosystem."},
+    {q:"What state of matter is ice?",a:"Solid",opts:["Liquid","Gas","Solid","Plasma"],fact:"The three main states of matter are solid, liquid, and gas."},
+    {q:"What protects Earth from the Sun's harmful rays?",a:"Ozone layer",opts:["Clouds","Ozone layer","Magnetic field","Atmosphere"],fact:"The ozone layer absorbs most of the Sun's UV radiation."},
+  ]
+};
+
+// ═══════════════════════════════════════════════
+//  LEVEL CONFIG
+// ═══════════════════════════════════════════════
+const LEVELS = [
+  {name:"Space Station", topic:"space",  bg:["#0d0d2b","#1a1a4e"], timeLimit:70, lives:3, hazardSpeed:1.4, hazardCount:3, orbCount:6},
+  {name:"Ocean Depths",  topic:"ocean",  bg:["#012233","#024466"], timeLimit:60, lives:3, hazardSpeed:2.0, hazardCount:5, orbCount:7},
+  {name:"Amazon Jungle", topic:"jungle", bg:["#0a1f0a","#1a3d0a"], timeLimit:55, lives:2, hazardSpeed:2.7, hazardCount:6, orbCount:7},
+  {name:"Sahara Desert", topic:"desert", bg:["#2a1500","#4a2800"], timeLimit:45, lives:2, hazardSpeed:3.3, hazardCount:8, orbCount:8},
+  {name:"Arctic Tundra", topic:"arctic", bg:["#0a1520","#102030"], timeLimit:40, lives:1, hazardSpeed:4.0, hazardCount:10,orbCount:8},
+];
+
+// ═══════════════════════════════════════════════
+//  CANVAS & STATE
+// ═══════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+let state='menu', level=0, score=0, lives=3, timeLeft=60;
+let correctAnswers=0, totalAnswered=0;
+let highScore = parseInt(localStorage.getItem('se_hs')||'0');
+let particles=[], orbs=[], hazards=[], platforms=[];
+let questionActive=false, currentOrb=null, questionAnswered=false;
+let timerInterval=null;
+let invincible=false, invincibleTimer=0;
+let usedQuestions={};
+let collected=0;
+let wasOnGround = false;
+
+// ═══════════════════════════════════════════════
+//  PLATFORMS
+// ═══════════════════════════════════════════════
+const GROUND = {x:0, y:H-55, w:W, h:55};
+const PLATFORM_DEFS = [
+  {x:50,  y:380, w:150, h:14},{x:280, y:350, w:130, h:14},{x:500, y:380, w:150, h:14},
+  {x:160, y:270, w:120, h:14},{x:390, y:250, w:120, h:14},{x:620, y:270, w:130, h:14},
+  {x:60,  y:170, w:130, h:14},{x:290, y:150, w:180, h:14},{x:570, y:170, w:130, h:14},
+  {x:180, y:75,  w:100, h:14},{x:440, y:65,  w:130, h:14},
+];
+const PLT_COLORS = [
+  ['#3a7bd5','#6ab0f5','#2255a4','#4d8fdb','#1e4a8c','#5ba0e0','#2a6ab5'],
+  ['#0066aa','#0088cc','#004488','#0077bb','#003366','#0099dd','#005599'],
+  ['#2d7a1f','#3d9a2a','#1e5a12','#4aab35','#266619','#35882a','#52bc3d'],
+  ['#a05010','#c06820','#804008','#b05818','#6a3406','#b86020','#d07030'],
+  ['#336688','#4488aa','#224466','#3377aa','#1a3355','#3d7799','#557faa'],
+];
+function buildPlatforms(){
+  platforms=[];
+  const cols=PLT_COLORS[level];
+  PLATFORM_DEFS.forEach((d,i)=>platforms.push({...d,color:cols[i%cols.length]}));
+}
+
+// ═══════════════════════════════════════════════
+//  PLAYER
+// ═══════════════════════════════════════════════
+const player={x:80,y:0,w:30,h:36,vx:0,vy:0,onGround:false,facing:1,animFrame:0,animTimer:0,trail:[]};
+function resetPlayer(){
+  player.x=80; player.y=GROUND.y-player.h;
+  player.vx=0; player.vy=0; player.onGround=false; player.trail=[];
+}
+
+// ═══════════════════════════════════════════════
+//  ORBS
+// ═══════════════════════════════════════════════
+const ORB_POS=[
+  {x:70,y:355},{x:170,y:355},{x:295,y:325},{x:360,y:325},
+  {x:515,y:355},{x:605,y:355},{x:170,y:248},{x:240,y:248},
+  {x:400,y:228},{x:465,y:228},{x:635,y:248},{x:700,y:248},
+  {x:75,y:148},{x:145,y:148},{x:305,y:128},{x:415,y:128},
+  {x:585,y:148},{x:655,y:148},{x:195,y:52},{x:455,y:42},
+];
+const ORB_COLS=['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff6fb8','#c77dff','#4ecdc4','#ff9f43'];
+
+function spawnOrbs(){
+  orbs=[]; collected=0;
+  const cfg=LEVELS[level], topic=cfg.topic;
+  if(!usedQuestions[topic]) usedQuestions[topic]=[];
+  let pool=QUESTIONS[topic].filter((_,i)=>!usedQuestions[topic].includes(i));
+  if(pool.length<cfg.orbCount){usedQuestions[topic]=[]; pool=[...QUESTIONS[topic]];}
+  pool=pool.sort(()=>Math.random()-0.5);
+  for(let i=0;i<cfg.orbCount;i++){
+    const pos=ORB_POS[i], q=pool[i];
+    usedQuestions[topic].push(QUESTIONS[topic].indexOf(q));
+    orbs.push({x:pos.x,y:pos.y,r:16,color:ORB_COLS[i%ORB_COLS.length],bob:Math.random()*Math.PI*2,collected:false,question:q,pulse:0});
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  HAZARDS
+// ═══════════════════════════════════════════════
+const HAZ_PATHS=[
+  {x:120,y:GROUND.y-30,range:200},{x:380,y:GROUND.y-30,range:200},
+  {x:600,y:GROUND.y-30,range:170},{x:70,y:362,range:110},
+  {x:295,y:332,range:90},{x:510,y:362,range:110},
+  {x:165,y:252,range:80},{x:395,y:232,range:90},
+  {x:625,y:252,range:90},{x:75,y:152,range:100},
+  {x:295,y:132,range:145},{x:575,y:152,range:100},
+];
+function spawnHazards(){
+  hazards=[];
+  const cfg=LEVELS[level];
+  for(let i=0;i<cfg.hazardCount&&i<HAZ_PATHS.length;i++){
+    const p=HAZ_PATHS[i];
+    hazards.push({x:p.x,startX:p.x,y:p.y,w:28,h:28,range:p.range,dir:i%2===0?1:-1,speed:cfg.hazardSpeed+(i*0.08),frame:0,frameTimer:0,type:i%4});
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  KEYBOARD INPUT
+// ═══════════════════════════════════════════════
+const keys={};
+window.addEventListener('keydown',e=>{
+  const nav=['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+  if(nav.includes(e.code)) e.preventDefault();
+  keys[e.code]=true;
+  if(e.code==='Enter'||e.code==='Space') handleStart();
+});
+window.addEventListener('keyup',e=>{keys[e.code]=false;});
+
+// ═══════════════════════════════════════════════
+//  MOBILE TOUCH CONTROLS
+// ═══════════════════════════════════════════════
+function bindBtn(id, keyCode){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('touchstart', e=>{e.preventDefault(); keys[keyCode]=true; el.classList.add('pressed');}, {passive:false});
+  el.addEventListener('touchend',  e=>{e.preventDefault(); keys[keyCode]=false; el.classList.remove('pressed');}, {passive:false});
+  el.addEventListener('mousedown', e=>{keys[keyCode]=true; el.classList.add('pressed');});
+  el.addEventListener('mouseup',   e=>{keys[keyCode]=false; el.classList.remove('pressed');});
+  el.addEventListener('mouseleave',e=>{keys[keyCode]=false; el.classList.remove('pressed');});
+}
+bindBtn('leftBtn','ArrowLeft');
+bindBtn('rightBtn','ArrowRight');
+bindBtn('jumpBtn','ArrowUp');
+
+// Tap anywhere on canvas to start
+canvas.addEventListener('touchstart', e=>{
+  e.preventDefault();
+  if(state==='menu'||state==='levelComplete'||state==='gameOver'||state==='win') handleStart();
+  getAudio(); // unlock audio on first touch
+},{passive:false});
+
+function handleStart(){
+  getAudio();
+  if(state==='menu'){level=0;score=0;correctAnswers=0;totalAnswered=0;startLevel();}
+  else if(state==='levelComplete'&&level<LEVELS.length-1){level++;startLevel();}
+  else if(state==='gameOver'||state==='win'){level=0;score=0;correctAnswers=0;totalAnswered=0;startLevel();}
+}
+
+// ═══════════════════════════════════════════════
+//  PHYSICS
+// ═══════════════════════════════════════════════
+const GRAV=0.55, JUMP=-13.5, SPEED=4.8, FRIC=0.78;
+
+function updatePlayer(dt){
+  if(questionActive) return;
+  if(keys['ArrowLeft']||keys['KeyA']){player.vx-=SPEED*0.35; player.facing=-1;}
+  if(keys['ArrowRight']||keys['KeyD']){player.vx+=SPEED*0.35; player.facing=1;}
+  if((keys['ArrowUp']||keys['KeyW']||keys['Space'])&&player.onGround){
+    player.vy=JUMP; player.onGround=false;
+    spawnParticles(player.x+player.w/2, player.y+player.h, '#4ecdc4', 6);
+    playSound('jump');
+  }
+  player.vx*=FRIC;
+  player.vx=Math.max(-SPEED,Math.min(SPEED,player.vx));
+  player.vy=Math.min(player.vy+GRAV,18);
+  player.x+=player.vx; player.y+=player.vy;
+
+  player.trail.push({x:player.x+player.w/2, y:player.y+player.h/2});
+  if(player.trail.length>8) player.trail.shift();
+
+  if(player.x<0){player.x=0; player.vx=0;}
+  if(player.x+player.w>W){player.x=W-player.w; player.vx=0;}
+  if(player.y<0){player.y=0; player.vy=0;}
+
+  const prevGround = player.onGround;
+  player.onGround=false;
+  resolveRect(player,GROUND);
+  platforms.forEach(p=>resolveRect(player,p));
+
+  // Land sound
+  if(!prevGround && player.onGround) playSound('land');
+
+  player.animTimer+=dt;
+  if(player.animTimer>130){player.animTimer=0; player.animFrame=(player.animFrame+1)%4;}
+  if(invincible){invincibleTimer-=dt; if(invincibleTimer<=0) invincible=false;}
+}
+
+function resolveRect(o,p){
+  if(o.x+o.w>p.x&&o.x<p.x+p.w&&o.y+o.h>p.y&&o.y<p.y+p.h){
+    const oL=o.x+o.w-p.x, oR=p.x+p.w-o.x, oT=o.y+o.h-p.y, oB=p.y+p.h-o.y;
+    const m=Math.min(oL,oR,oT,oB);
+    if(m===oT&&o.vy>=0){o.y=p.y-o.h; o.vy=0; o.onGround=true;}
+    else if(m===oB&&o.vy<0){o.y=p.y+p.h; o.vy=0;}
+    else if(m===oL){o.x=p.x-o.w; o.vx=0;}
+    else if(m===oR){o.x=p.x+p.w; o.vx=0;}
+  }
+}
+
+function overlap(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;}
+
+function updateHazards(dt){
+  if(questionActive) return;
+  for(const h of hazards){
+    h.x+=h.speed*h.dir;
+    if(h.x>h.startX+h.range) h.dir=-1;
+    if(h.x<h.startX-h.range) h.dir=1;
+    h.frameTimer+=dt;
+    if(h.frameTimer>140){h.frameTimer=0; h.frame=(h.frame+1)%2;}
+    if(!invincible&&overlap(player,h)) hitPlayer();
+  }
+}
+
+function updateOrbs(){
+  if(questionActive) return;
+  for(const o of orbs){
+    if(o.collected) continue;
+    o.bob+=0.05; o.pulse+=0.08;
+    const oy=o.y+Math.sin(o.bob)*5;
+    if(player.x<o.x+o.r*2&&player.x+player.w>o.x&&player.y<oy+o.r*2&&player.y+player.h>oy) triggerQuestion(o);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  QUESTION SYSTEM
+// ═══════════════════════════════════════════════
+function triggerQuestion(orb){
+  questionActive=true; questionAnswered=false; currentOrb=orb;
+  const q=orb.question;
+  document.getElementById('qBadge').textContent=`🔬 ${LEVELS[level].name}`;
+  document.getElementById('qText').textContent=q.q;
+  document.getElementById('qFeedback').textContent='';
+  const opts=document.getElementById('qOptions');
+  opts.innerHTML='';
+  [...q.opts].sort(()=>Math.random()-0.5).forEach(opt=>{
+    const btn=document.createElement('button');
+    btn.className='qBtn'; btn.textContent=opt;
+    btn.onclick=()=>answerQuestion(opt,q,btn);
+    opts.appendChild(btn);
+  });
+  document.getElementById('qModal').style.display='block';
+}
+
+function answerQuestion(chosen,q,btn){
+  if(questionAnswered) return;
+  questionAnswered=true; totalAnswered++;
+  const correct=chosen===q.a;
+  btn.classList.add(correct?'correct':'wrong');
+  if(!correct) document.querySelectorAll('.qBtn').forEach(b=>{if(b.textContent===q.a) b.classList.add('correct');});
+  document.getElementById('qFeedback').textContent = correct
+    ? `✅ Correct! ${q.fact}`
+    : `❌ Answer: "${q.a}". ${q.fact}`;
+
+  if(correct){
+    playSound('correct');
+    correctAnswers++; score+=200*(level+1);
+    spawnParticles(currentOrb.x+currentOrb.r, currentOrb.y+currentOrb.r, currentOrb.color, 14);
+    currentOrb.collected=true; collected++; updateHUD();
+    if(collected>=LEVELS[level].orbCount){setTimeout(()=>{closeModal(); levelComplete();},1800); return;}
+  } else {
+    playSound('wrong');
+    lives--; updateHUD();
+    if(lives<=0){setTimeout(()=>{closeModal(); endGame(false);},1600); return;}
+    invincible=true; invincibleTimer=1500;
+  }
+  setTimeout(()=>closeModal(), 1800);
+}
+
+function closeModal(){
+  document.getElementById('qModal').style.display='none';
+  questionActive=false; currentOrb=null;
+}
+
+// ═══════════════════════════════════════════════
+//  PARTICLES
+// ═══════════════════════════════════════════════
+function spawnParticles(x,y,color,n){
+  for(let i=0;i<n;i++)
+    particles.push({x,y,color,vx:(Math.random()-0.5)*7,vy:(Math.random()-0.5)*7-2,life:1,size:Math.random()*6+3});
+}
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=0.022;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  HIT
+// ═══════════════════════════════════════════════
+function hitPlayer(){
+  lives--; invincible=true; invincibleTimer=2000;
+  spawnParticles(player.x+player.w/2, player.y+player.h/2,'#ff6b6b',12);
+  playSound('hit'); updateHUD();
+  if(lives<=0) endGame(false);
+}
+
+// ═══════════════════════════════════════════════
+//  HUD
+// ═══════════════════════════════════════════════
+function updateHUD(){
+  document.getElementById('scoreEl').textContent=score;
+  document.getElementById('levelEl').textContent=level+1;
+  document.getElementById('timeEl').textContent=Math.ceil(timeLeft);
+  document.getElementById('correctEl').textContent=`${correctAnswers}/${totalAnswered}`;
+  document.getElementById('bestEl').textContent=Math.max(score,highScore);
+  const hd=document.getElementById('heartsDiv'); hd.innerHTML='';
+  for(let i=0;i<LEVELS[level].lives+1;i++){
+    const s=document.createElement('span'); s.style.fontSize='14px';
+    s.textContent=i<lives?'❤️':'🖤'; hd.appendChild(s);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  TIMER
+// ═══════════════════════════════════════════════
+function startTimer(){
+  clearInterval(timerInterval); timeLeft=LEVELS[level].timeLimit; updateHUD();
+  timerInterval=setInterval(()=>{
+    if(state!=='playing') return;
+    timeLeft--; updateHUD();
+    if(timeLeft<=0) endGame(false);
+  },1000);
+}
+
+// ═══════════════════════════════════════════════
+//  GAME FLOW
+// ═══════════════════════════════════════════════
+function startLevel(){
+  state='playing'; collected=0; lives=LEVELS[level].lives;
+  buildPlatforms(); spawnOrbs(); spawnHazards(); resetPlayer();
+  particles=[]; invincible=false; questionActive=false; usedQuestions={};
+  document.getElementById('qModal').style.display='none';
+  updateHUD(); startTimer(); startMusic(level);
+}
+
+function levelComplete(){
+  state='levelComplete'; clearInterval(timerInterval); stopMusic();
+  score+=Math.floor(timeLeft)*15*(level+1); updateHUD();
+  playSound('levelup');
+  if(level>=LEVELS.length-1) endGame(true);
+}
+
+function endGame(won){
+  state=won?'win':'gameOver'; clearInterval(timerInterval); stopMusic();
+  if(score>highScore){highScore=score; localStorage.setItem('se_hs',highScore);}
+  updateHUD(); playSound(won?'levelup':'gameover');
+}
+
+// ═══════════════════════════════════════════════
+//  DRAW BACKGROUND
+// ═══════════════════════════════════════════════
+function drawBG(){
+  const [c1,c2]=LEVELS[level].bg;
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,c1); g.addColorStop(1,c2);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  if(level===0){
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    for(let i=0;i<80;i++){ctx.beginPath();ctx.arc((i*173)%W,(i*97)%H,i%3===0?1.5:0.7,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle='rgba(100,150,255,0.3)'; ctx.beginPath(); ctx.arc(720,60,50,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(150,200,255,0.4)'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(720,60,80,15,0.4,0,Math.PI*2); ctx.stroke();
+  } else if(level===1){
+    ctx.strokeStyle='rgba(100,200,255,0.2)'; ctx.lineWidth=1.5;
+    for(let i=0;i<15;i++){ctx.beginPath();ctx.arc((i*123+50)%W,(i*87+30)%H,i%4*5+4,0,Math.PI*2);ctx.stroke();}
+    ctx.fillStyle='rgba(0,150,255,0.06)';
+    for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(150+i*130,-10);ctx.lineTo(100+i*130,H);ctx.lineTo(200+i*130,H);ctx.closePath();ctx.fill();}
+  } else if(level===2){
+    ctx.strokeStyle='rgba(0,100,0,0.4)'; ctx.lineWidth=2;
+    for(let i=0;i<6;i++){ctx.beginPath();const vx=100+i*130;ctx.moveTo(vx,0);for(let y=0;y<H;y+=20)ctx.lineTo(vx+Math.sin(y*0.05+i)*10,y);ctx.stroke();}
+  } else if(level===3){
+    ctx.fillStyle='rgba(255,180,0,0.15)'; ctx.beginPath(); ctx.arc(700,80,70,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(180,100,0,0.2)'; ctx.beginPath(); ctx.moveTo(0,H);
+    ctx.bezierCurveTo(200,H-60,400,H-80,600,H-40); ctx.bezierCurveTo(700,H-20,800,H-50,W,H-30);
+    ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  } else {
+    ctx.fillStyle='rgba(200,230,255,0.5)';
+    for(let i=0;i<40;i++){const sx=(i*113+50)%W,sy=(i*79+20)%H;ctx.beginPath();ctx.arc(sx,sy,i%3+1,0,Math.PI*2);ctx.fill();}
+  }
+}
+
+const GND_COLS=[['#1a1a4e','#2a2a6e'],['#014466','#025588'],['#1e4a0a','#2a6612'],['#3a1800','#5a2a00'],['#1a3a5a','#1e4a6a']];
+function drawGround(){
+  const [c1,c2]=GND_COLS[level];
+  const g=ctx.createLinearGradient(0,GROUND.y,0,H); g.addColorStop(0,c1); g.addColorStop(1,c2);
+  ctx.fillStyle=g; ctx.fillRect(0,GROUND.y,W,GROUND.h);
+  ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,GROUND.y); ctx.lineTo(W,GROUND.y); ctx.stroke();
+}
+
+function drawPlatforms(){
+  for(const p of platforms){
+    ctx.fillStyle=p.color; ctx.beginPath(); ctx.roundRect(p.x,p.y,p.w,p.h,4); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(p.x+4,p.y+2,p.w-8,3);
+  }
+}
+
+function drawOrbs(){
+  for(const o of orbs){
+    if(o.collected) continue;
+    const oy=o.y+Math.sin(o.bob)*5, cx=o.x+o.r, cy=oy+o.r;
+    const glow=ctx.createRadialGradient(cx,cy,0,cx,cy,o.r*2.5);
+    glow.addColorStop(0,o.color+'55'); glow.addColorStop(1,'transparent');
+    ctx.fillStyle=glow; ctx.fillRect(cx-o.r*2.5,cy-o.r*2.5,o.r*5,o.r*5);
+    const grad=ctx.createRadialGradient(cx-o.r*0.3,cy-o.r*0.3,1,cx,cy,o.r);
+    grad.addColorStop(0,'#fff'); grad.addColorStop(0.3,o.color); grad.addColorStop(1,o.color+'99');
+    ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(cx,cy,o.r,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='bold 16px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('?',cx,cy+1); ctx.textBaseline='alphabetic';
+    ctx.strokeStyle=o.color+'66'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,o.r+3+Math.sin(o.pulse)*4,0,Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawHazards(){
+  for(const h of hazards){
+    ctx.save(); ctx.translate(h.x+h.w/2,h.y+h.h/2);
+    drawHazardShape(h.type+(level*4),h); ctx.restore();
+  }
+}
+
+function drawHazardShape(type,h){
+  const wh=h.w/2;
+  switch(type%20){
+    case 0:case 4:case 8:case 12:case 16:{
+      const c=type<8?'#ff4444':type<12?'#8800cc':type<16?'#cc4400':'#ccccff';
+      ctx.fillStyle=c; ctx.beginPath(); ctx.arc(0,0,wh,0,Math.PI*2); ctx.fill();
+      for(let i=0;i<7;i++){const a=(i/7)*Math.PI*2;ctx.fillStyle=c+'cc';ctx.beginPath();ctx.moveTo(Math.cos(a)*(wh-2),Math.sin(a)*(wh-2));ctx.lineTo(Math.cos(a)*(wh+6),Math.sin(a)*(wh+6));ctx.lineTo(Math.cos(a+0.4)*(wh-2),Math.sin(a+0.4)*(wh-2));ctx.fill();}
+      break;}
+    case 1:case 5:{
+      ctx.fillStyle='rgba(100,180,255,0.8)'; ctx.beginPath(); ctx.arc(0,-2,wh,Math.PI,0); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(150,220,255,0.6)'; ctx.lineWidth=1;
+      for(let i=-2;i<=2;i++){ctx.beginPath();ctx.moveTo(i*5,wh-4);ctx.bezierCurveTo(i*5+3,wh+5,i*5-3,wh+10,i*5,wh+14+(h.frame*3));ctx.stroke();}
+      break;}
+    case 2:case 6:{
+      ctx.fillStyle='#2ecc40'; ctx.beginPath(); ctx.ellipse(0,0,wh,wh*0.7,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#ff4136'; ctx.fillRect(-4,wh*0.4,3,7+(h.frame*2)); ctx.fillRect(1,wh*0.4,3,7+(h.frame*2));
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-5,-3,3,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(5,-3,3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(-5,-3,1.5,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(5,-3,1.5,0,Math.PI*2); ctx.fill();
+      break;}
+    case 3:case 7:{
+      ctx.fillStyle='#f39c12'; ctx.beginPath(); ctx.ellipse(0,0,wh,wh*0.6,0,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#e67e22'; ctx.lineWidth=2; ctx.beginPath();
+      ctx.moveTo(wh,0); ctx.bezierCurveTo(wh+8,-10,wh+10,-20,wh+5,-25+(h.frame*3)); ctx.stroke();
+      ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.arc(wh+5,-25+(h.frame*3),3,0,Math.PI*2); ctx.fill();
+      break;}
+    default:{
+      ctx.strokeStyle='rgba(200,230,255,0.9)'; ctx.lineWidth=2;
+      for(let i=0;i<6;i++){const a=i*Math.PI/3;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*wh,Math.sin(a)*wh);ctx.stroke();ctx.beginPath();ctx.arc(Math.cos(a)*wh*0.5,Math.sin(a)*wh*0.5,3,0,Math.PI*2);ctx.fillStyle='rgba(200,230,255,0.7)';ctx.fill();}
+      break;}
+  }
+}
+
+function drawPlayer(){
+  for(let i=0;i<player.trail.length;i++){
+    const t=player.trail[i]; ctx.globalAlpha=(i/player.trail.length)*0.2; ctx.fillStyle='#4ecdc4';
+    ctx.beginPath(); ctx.arc(t.x,t.y,7,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  if(invincible&&Math.floor(Date.now()/100)%2===0) return;
+  const px=player.x, py=player.y, pw=player.w, ph=player.h;
+  ctx.save(); ctx.translate(px+pw/2,py+ph/2); ctx.scale(player.facing,1);
+  ctx.fillStyle='#3d7bd5'; ctx.beginPath(); ctx.roundRect(-pw/2,0,pw,ph/2,5); ctx.fill();
+  ctx.fillStyle='#ffd93d'; ctx.beginPath(); ctx.arc(0,-ph/4,12,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(150,220,255,0.6)'; ctx.beginPath(); ctx.arc(2,-ph/4,8,Math.PI*1.1,Math.PI*2.5); ctx.fill();
+  ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(5,-ph/4-1,2.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#e74c3c'; ctx.fillRect(pw/2-5,-ph/4,7,12);
+  const lo=player.onGround?Math.sin(player.animFrame*Math.PI/2)*4:0;
+  ctx.fillStyle='#2255aa'; ctx.fillRect(-pw/2+2,ph/2-10,9,10); ctx.fillRect(pw/2-11,ph/2-10+lo,9,10);
+  ctx.fillStyle='#222'; ctx.fillRect(-pw/2+1,ph/2-2,11,6); ctx.fillRect(pw/2-12,ph/2-2+lo,11,6);
+  ctx.restore();
+}
+
+function drawParticles(){
+  for(const p of particles){ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+}
+
+function drawProgress(){
+  const total=LEVELS[level].orbCount, pct=collected/total, bw=170;
+  ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.roundRect(10,10,bw,15,4); ctx.fill();
+  ctx.fillStyle=pct>0.7?'#6bcb77':pct>0.4?'#ffd93d':'#4ecdc4';
+  ctx.beginPath(); ctx.roundRect(10,10,bw*pct,15,4); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1; ctx.beginPath(); ctx.roundRect(10,10,bw,15,4); ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='bold 9px Segoe UI'; ctx.textAlign='left';
+  ctx.fillText(`${collected}/${total} Orbs`,14,21);
+  if(totalAnswered>0){
+    const acc=Math.round((correctAnswers/totalAnswered)*100);
+    ctx.fillStyle=acc>=70?'#6bcb77':acc>=50?'#ffd93d':'#ff6b6b';
+    ctx.fillText(`Accuracy: ${acc}%`,14,36);
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  SCREENS
+// ═══════════════════════════════════════════════
+function drawMenu(){
+  drawBG(); ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.shadowColor='#4ecdc4'; ctx.shadowBlur=35;
+  ctx.fillStyle='#4ecdc4'; ctx.font='bold 60px Segoe UI'; ctx.textAlign='center';
+  ctx.fillText('🔬 SCIENCE EXPLORER',W/2,105); ctx.restore();
+  ctx.fillStyle='#ffd93d'; ctx.font='bold 16px Segoe UI'; ctx.textAlign='center';
+  ctx.fillText('An Educational Adventure for Young Scientists!',W/2,140);
+
+  // Level cards
+  ctx.fillStyle='rgba(255,255,255,0.07)'; ctx.beginPath(); ctx.roundRect(W/2-355,160,710,115,10); ctx.fill();
+  const icons=['🚀','🌊','🌿','🏜️','❄️'];
+  LEVELS.forEach((lv,i)=>{
+    const bx=W/2-340+i*143;
+    ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.roundRect(bx,168,128,95,8); ctx.fill();
+    ctx.font='26px Segoe UI'; ctx.textAlign='center'; ctx.fillText(icons[i],bx+64,200);
+    ctx.fillStyle='#fff'; ctx.font='bold 10px Segoe UI'; ctx.fillText(lv.name,bx+64,218);
+    ctx.fillStyle='#aaa'; ctx.font='9px Segoe UI'; ctx.fillText(`⏱${lv.timeLimit}s ❤️${lv.lives} ❓${lv.orbCount}Q`,bx+64,234);
+    ctx.fillStyle='#4ecdc4'; ctx.fillText(`Level ${i+1}`,bx+64,250);
+  });
+
+  // How to play
+  ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.roundRect(W/2-300,287,600,95,10); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='14px Segoe UI'; ctx.textAlign='center';
+  ctx.fillText('🎮 Arrow Keys / WASD = Move   |   Space / Up = Jump',W/2,312);
+  ctx.fillText('❓ Touch a glowing ? orb to answer a science question',W/2,335);
+  ctx.fillText('👾 Avoid the hazards!   |   Answer correctly to score points',W/2,358);
+
+  const pulse=0.7+0.3*Math.sin(Date.now()/400); ctx.globalAlpha=pulse;
+  ctx.fillStyle='#ffd93d'; ctx.font='bold 24px Segoe UI';
+  ctx.fillText('▶  Press ENTER, SPACE or TAP to Start',W/2,412); ctx.globalAlpha=1;
+  if(highScore>0){ctx.fillStyle='#ff6fb8'; ctx.font='14px Segoe UI'; ctx.fillText(`🏆 High Score: ${highScore}`,W/2,445);}
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.font='11px Segoe UI';
+  ctx.fillText('📱 Mobile: use the on-screen buttons below',W/2,470);
+}
+
+function drawLevelComplete(){
+  drawBG(); drawGround(); drawPlatforms(); updateParticles(); drawParticles();
+  ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#ffd93d'; ctx.font='bold 48px Segoe UI'; ctx.textAlign='center';
+  ctx.fillText(`✨ Level ${level+1} Complete!`,W/2,H/2-80);
+  ctx.fillStyle='#4ecdc4'; ctx.font='22px Segoe UI'; ctx.fillText(LEVELS[level].name,W/2,H/2-30);
+  ctx.fillStyle='#fff'; ctx.font='20px Segoe UI'; ctx.fillText(`Score: ${score}`,W/2,H/2+20);
+  const acc=totalAnswered>0?Math.round((correctAnswers/totalAnswered)*100):0;
+  ctx.fillStyle=acc>=80?'#6bcb77':acc>=60?'#ffd93d':'#ff6b6b';
+  ctx.fillText(`Science Accuracy: ${acc}% (${correctAnswers}/${totalAnswered})`,W/2,H/2+55);
+  if(level<LEVELS.length-1){
+    ctx.fillStyle='#aaa'; ctx.font='16px Segoe UI';
+    ctx.fillText('Press ENTER, SPACE or TAP to continue →',W/2,H/2+100);
+  }
+}
+
+function drawGameOver(){
+  drawBG(); ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#ff6b6b'; ctx.font='bold 56px Segoe UI'; ctx.textAlign='center'; ctx.fillText('💀 Game Over',W/2,H/2-70);
+  ctx.fillStyle='#fff'; ctx.font='22px Segoe UI'; ctx.fillText(`Final Score: ${score}`,W/2,H/2-10);
+  const acc=totalAnswered>0?Math.round((correctAnswers/totalAnswered)*100):0;
+  ctx.fillStyle=acc>=70?'#6bcb77':'#ffd93d'; ctx.fillText(`Science Accuracy: ${acc}% (${correctAnswers}/${totalAnswered})`,W/2,H/2+30);
+  if(score>=highScore&&score>0){ctx.fillStyle='#ffd93d'; ctx.font='bold 20px Segoe UI'; ctx.fillText('🏆 New High Score!',W/2,H/2+70);}
+  ctx.fillStyle='#aaa'; ctx.font='16px Segoe UI'; ctx.fillText('Press ENTER, SPACE or TAP to play again',W/2,H/2+115);
+}
+
+function drawWin(){
+  drawBG(); ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.shadowColor='#ffd93d'; ctx.shadowBlur=50;
+  ctx.fillStyle='#ffd93d'; ctx.font='bold 50px Segoe UI'; ctx.textAlign='center';
+  ctx.fillText('🏆 You Mastered Science! 🏆',W/2,H/2-90); ctx.restore();
+  ctx.fillStyle='#4ecdc4'; ctx.font='20px Segoe UI'; ctx.fillText("All 5 biomes explored! You're a Science Explorer!",W/2,H/2-40);
+  ctx.fillStyle='#fff'; ctx.font='20px Segoe UI'; ctx.fillText(`Final Score: ${score}`,W/2,H/2+10);
+  const acc=totalAnswered>0?Math.round((correctAnswers/totalAnswered)*100):0;
+  ctx.fillStyle=acc>=80?'#6bcb77':'#ffd93d';
+  ctx.fillText(`Overall Accuracy: ${acc}% (${correctAnswers}/${totalAnswered} correct)`,W/2,H/2+50);
+  if(score>=highScore){ctx.fillStyle='#ffd93d'; ctx.font='bold 20px Segoe UI'; ctx.fillText('🌟 New High Score!',W/2,H/2+90);}
+  ctx.fillStyle='#aaa'; ctx.font='16px Segoe UI'; ctx.fillText('Press ENTER, SPACE or TAP to play again',W/2,H/2+135);
+  spawnParticles(Math.random()*W,Math.random()*H*0.6,['#ffd93d','#ff6b6b','#4ecdc4','#6bcb77','#ff6fb8'][Math.floor(Math.random()*5)],2);
+}
+
+// ═══════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════
+let last=0;
+function loop(ts){
+  const dt=ts-last; last=ts;
+  ctx.clearRect(0,0,W,H);
+  if(state==='menu') drawMenu();
+  else if(state==='playing'){
+    drawBG(); drawGround(); drawPlatforms(); drawOrbs(); drawHazards();
+    drawPlayer(); drawParticles(); drawProgress();
+    updatePlayer(dt); updateHazards(dt); updateOrbs(); updateParticles();
+  }
+  else if(state==='levelComplete') drawLevelComplete();
+  else if(state==='gameOver') drawGameOver();
+  else if(state==='win'){drawWin(); updateParticles(); drawParticles();}
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+updateHUD();
+document.getElementById('bestEl').textContent=highScore;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
